@@ -1,0 +1,19 @@
+{
+  "name": "contacts-crud-app",
+  "version": "1.0.0",
+  "description": "REST API CRUD приложение для управления списком телефонных контактов (NodeJS + Express + MongoDB)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "bash test_api.sh"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "body-parser": "^1.20.3",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "mongodb": "^6.10.0"
+  }
+}

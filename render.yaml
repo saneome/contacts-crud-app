@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: contacts-crud-app
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
