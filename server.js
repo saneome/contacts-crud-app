@@ -252,45 +252,59 @@ function registerRoutes(app, collection) {
   app.delete("/api/contacts/:id", deleteContactById);
 }
 
-// Запуск сервера с поддержкой MongoDB (при наличии MONGODB_URI) или встроенного хранилища
-var mongoUri = process.env.MONGODB_URI;
-var PORT = process.env.PORT || 8080;
+// Инициализация выполняется отдельно от listen, чтобы тот же Express app
+// можно было запускать как обычный сервер или как Vercel Function.
+var routesRegistered = false;
+var mongoClient = null;
+var initializationPromise = null;
 
-if (mongoUri) {
-  console.log("Обнаружена переменная MONGODB_URI. Подключение к MongoDB...");
-  var client = new mongodb.MongoClient(mongoUri, {
-    serverSelectionTimeoutMS: 5000,
-    connectTimeoutMS: 5000
-  });
+async function initializeDatabase() {
 
-  client.connect().then(function (connectedClient) {
-    console.log("Успешное подключение к MongoDB по адресу:", mongoUri);
-    var db = connectedClient.db();
-    var collection = db.collection(CONTACTS_COLLECTION);
+  var mongoUri = process.env.MONGODB_URI;
+  if (mongoUri) {
+    if (!mongoClient) {
+      mongoClient = new mongodb.MongoClient(mongoUri, {
+        serverSelectionTimeoutMS: 10000,
+        connectTimeoutMS: 10000
+      });
+    }
+    await mongoClient.connect();
+    var collection = mongoClient.db().collection(CONTACTS_COLLECTION);
     registerRoutes(app, collection);
-    startHttpServer();
-  }).catch(function (err) {
-    console.error("Не удалось подключиться к MongoDB (" + err.message + ").");
-    console.log("Активировано локальное файловое хранилище (data/contacts.json).");
+  } else {
+    if (process.env.VERCEL) {
+      throw new Error("Для Vercel необходимо задать переменную MONGODB_URI.");
+    }
     var localDb = new LocalFileDatabase(path.join(__dirname, "data", "contacts.json"));
     registerRoutes(app, localDb);
-    startHttpServer();
-  });
-} else {
-  console.log("Переменная MONGODB_URI не задана.");
-  console.log("Активировано автономное файловое хранилище (data/contacts.json).");
-  var localDb = new LocalFileDatabase(path.join(__dirname, "data", "contacts.json"));
-  registerRoutes(app, localDb);
-  startHttpServer();
+  }
+  routesRegistered = true;
 }
 
-function startHttpServer() {
-  var server = app.listen(PORT, function () {
-    var port = server.address().port;
-    console.log("Приложение запущено на порту", port);
-    console.log("API доступен по адресам: http://localhost:" + port + "/v1/contact и /api/contacts");
-    console.log("Веб-интерфейс доступен по адресу: http://localhost:" + port + "/");
+function initialize() {
+  if (routesRegistered) return Promise.resolve();
+  if (!initializationPromise) {
+    initializationPromise = initializeDatabase().catch(function (err) {
+      initializationPromise = null;
+      throw err;
+    });
+  }
+  return initializationPromise;
+}
+
+if (require.main === module) {
+  var PORT = process.env.PORT || 8080;
+  initialize().then(function () {
+    var server = app.listen(PORT, function () {
+      var port = server.address().port;
+      console.log("Приложение запущено на порту", port);
+      console.log("API доступен по адресам: http://localhost:" + port + "/v1/contact и /api/contacts");
+      console.log("Веб-интерфейс доступен по адресу: http://localhost:" + port + "/");
+    });
+  }).catch(function (err) {
+    console.error("Не удалось запустить приложение:", err.message);
+    process.exitCode = 1;
   });
 }
 
-module.exports = app;
+module.exports = { app: app, initialize: initialize };
