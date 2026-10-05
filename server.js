@@ -17,6 +17,17 @@ app.use(bodyParser.json());
 var distDir = path.join(__dirname, "public");
 app.use(express.static(distDir));
 
+// При запуске на Vercel база и маршруты поднимаются при первом API-запросе.
+// Статические файлы отдаются Express выше без необходимости подключать БД.
+app.use(function (req, res, next) {
+  initialize().then(function () {
+    next();
+  }).catch(function (err) {
+    console.error("Не удалось инициализировать приложение:", err.message);
+    res.status(500).json({ error: "Не удалось подключиться к базе данных." });
+  });
+});
+
 // Общий обработчик ошибок (Листинг 5.2)
 function handleError(res, reason, message, code) {
   console.log("Ошибка: " + reason);
@@ -307,4 +318,5 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app: app, initialize: initialize };
+app.initialize = initialize;
+module.exports = app;
